@@ -15,7 +15,7 @@ all_directions_dictionary: dict[str, str] = {
 
 }
 
-CANCEL = InlineKeyboardButton(text='Отмена ❌', callback_data='cancel')
+CANCEL: InlineKeyboardButton = InlineKeyboardButton(text='Отмена ❌', callback_data='cancel')
 
 
 def get_directions_keyboard() -> InlineKeyboardMarkup:

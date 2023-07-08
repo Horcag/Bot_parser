@@ -19,7 +19,7 @@ HELP: str = '''
 /snils - ввод своего СНИЛСа
 /directions - выбор своего направления
 
-<b>Что такое направление наивысший приоритет?</b>
+<b>Что такое направление с наивысшим приоритетом?</b>
 Это то направление, где Вы поставили 1.
 
 <b>Что-то не работает или другие вопросы?</b>
@@ -84,7 +84,7 @@ async def get_direction_list(message: types.Message) -> None:
 async def process_cancel(callback_query: types.CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
-    await state.finish()
+    await state.reset_state(with_data=False)
 
 
 @dp.message_handler(state=UserState.SNILS)
@@ -103,7 +103,7 @@ async def process_of_getting_snl(message: types.Message, state=FSMContext) -> No
             await UserState.SELECT_DIRECTION.set()
         else:
             await message.answer(text=f'СНИЛС сохранен!')
-            await state.finish()
+            await state.reset_state(with_data=False)
     else:
         await message.answer('Неверный СНИЛС, попробуйте снова.')
 
@@ -134,7 +134,7 @@ async def confirmation_process(callback_query: types.CallbackQuery, state: FSMCo
             await UserState.SELECT_DIRECTION.set()
         case 'yes':
             await callback_query.message.edit_text('Направление сохранено!')
-            await state.finish()
+            await state.reset_state(with_data=False)
         case _:
             raise 'Неизвестная команда'
 
