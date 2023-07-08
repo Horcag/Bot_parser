@@ -8,15 +8,22 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import BotCommand
 
 storage: MemoryStorage = MemoryStorage()
 bot: Bot = Bot(token=config.bot_token.get_secret_value())
 dp: Dispatcher = Dispatcher(bot=bot, storage=storage)
 snl_pattern: Pattern = compile(r'^\d{3}-\d{3}-\d{3}-\d{2}$')
 HELP: str = '''
-Команды бота:
+<b>Команды</b>:
 /snils - ввод своего СНИЛСа
 /directions - выбор своего направления
+
+<b>Что такое направление наивысший приоритет?</b>
+Это то направление, где Вы поставили 1.
+
+<b>Что-то не работает или другие вопросы?</b>
+Напишите @nikital_s
 '''
 TEXT_DIRECTIONS: str = 'направление, где у вас высший приоритет. <b>НЕ РАБОТАЕТ С ИНЫМИ ПРИОРИТЕТАМИ</b>'
 TEXT_SNL: str = 'Пожалуйста, отправьте свой СНИЛС в формате <b>123-456-789-00</b>'
@@ -28,8 +35,14 @@ class UserState(StatesGroup):
     YES_OR_NO_SELECT_DIRECTION: State = State()
 
 
-async def on_startup(_) -> None:
-    print('Бот запущен.')
+async def setup_bot_commands(_):
+    bot_commands = [
+        BotCommand(command="/start", description="начало работы с ботом"),
+        BotCommand(command="/snils", description="ввод своего СНИЛСа"),
+        BotCommand(command="/directions", description="выбор своего направления"),
+        BotCommand(command="/help", description="помощь")
+    ]
+    await bot.set_my_commands(bot_commands)
 
 
 @dp.message_handler(commands=['start'])
@@ -44,7 +57,8 @@ async def start_command(message: types.Message) -> None:
 @dp.message_handler(commands=['help'])
 async def help_command(message: types.Message) -> None:
     await bot.send_message(chat_id=message.from_user.id,
-                           text=HELP)
+                           text=HELP,
+                           parse_mode='HTML')
     # await message.delete()
 
 
@@ -52,6 +66,7 @@ async def help_command(message: types.Message) -> None:
 async def get_snl(message: types.Message) -> None:
     await bot.send_message(chat_id=message.from_user.id,
                            text=TEXT_SNL,
+                           reply_markup=keyboards.command_cancel(),
                            parse_mode='HTML')
     await UserState.SNILS.set()
 
@@ -63,6 +78,13 @@ async def get_direction_list(message: types.Message) -> None:
                            reply_markup=keyboards.get_directions_keyboard(),
                            parse_mode='HTML')
     await UserState.SELECT_DIRECTION.set()
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'cancel', state='*')
+async def process_cancel(callback_query: types.CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
+    await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
+    await state.finish()
 
 
 @dp.message_handler(state=UserState.SNILS)
@@ -118,8 +140,9 @@ async def confirmation_process(callback_query: types.CallbackQuery, state: FSMCo
 
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data == "enter_snl")
-async def enter_snils(callback_query: types.CallbackQuery, state: FSMContext) -> None:
+async def enter_snils(callback_query: types.CallbackQuery) -> None:
     await callback_query.message.edit_text(text=TEXT_SNL,
+                                           reply_markup=keyboards.command_cancel(),
                                            parse_mode='HTML')
     await UserState.SNILS.set()
 
@@ -129,4 +152,4 @@ def save_snl_to_database(snl: str):
 
 
 if __name__ == '__main__':
-    executor.start_polling(dispatcher=dp, skip_updates=True, on_startup=on_startup)
+    executor.start_polling(dispatcher=dp, skip_updates=True, on_startup=setup_bot_commands)

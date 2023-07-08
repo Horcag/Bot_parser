@@ -15,6 +15,8 @@ all_directions_dictionary: dict[str, str] = {
 
 }
 
+CANCEL = InlineKeyboardButton(text='Отмена ❌', callback_data='cancel')
+
 
 def get_directions_keyboard() -> InlineKeyboardMarkup:
     ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
@@ -28,7 +30,8 @@ def get_directions_keyboard() -> InlineKeyboardMarkup:
            InlineKeyboardButton(text=all_directions_dictionary['20'], callback_data='20'),
            InlineKeyboardButton(text=all_directions_dictionary['21'], callback_data='21'),
            InlineKeyboardButton(text=all_directions_dictionary['22'], callback_data='22'),
-           InlineKeyboardButton(text=all_directions_dictionary['23'], callback_data='23')
+           InlineKeyboardButton(text=all_directions_dictionary['23'], callback_data='23'),
+           CANCEL
            )
     return ik
 
@@ -43,5 +46,13 @@ def confirmation_of_selection() -> InlineKeyboardMarkup:
 
 def command_snl() -> InlineKeyboardMarkup:
     ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
-    ik.add(InlineKeyboardButton(text='Ввести свой снилс:', callback_data='enter_snl'))
+    ik.add(InlineKeyboardButton(text='Ввести свой снилс:', callback_data='enter_snl'),
+           CANCEL
+           )
+    return ik
+
+
+def command_cancel() -> InlineKeyboardMarkup:
+    ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
+    ik.add(CANCEL)
     return ik
