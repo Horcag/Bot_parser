@@ -40,7 +40,7 @@ class University:
                 numbers.append(number)
         for i in it:
             student_data: list[str | int] = i.text.split()
-            if student_data[8] == '1':  # делаем отбор по приоритетам: нам нужен только первый
+            if student_data[8] == '1' and student_data[10] == 'Сданы ВИ':  # делаем отбор по приоритетам: нам нужен только первый
                 student_data = [count] + list(map(lambda a: int(a) if a.isdigit() else a, student_data))[1:]  # для удобства преобразуем все числовые значения в 'int'
                 students_data.append(student_data)
                 count += 1
