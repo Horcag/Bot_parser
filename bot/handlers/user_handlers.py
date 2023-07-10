@@ -36,6 +36,7 @@ async def start_command(message: types.Message) -> None:
                            text='Здравствуйте! Чтобы начать пользоваться ботом нужно указать свой <b>СНИЛС</b> и <b>направление</b>.',
                            reply_markup=inline_keyboards.command_snl()
                            )
+    await sqlite_db.sql_add_user(message)
     # await message.delete()
 
 
@@ -63,12 +64,20 @@ async def get_direction_list(message: types.Message) -> None:
 
 
 async def get_place(message: types.Message, state: FSMContext) -> None:
-    async with state.proxy() as data:
-        snl: str = data['snl']
-        direction: str = data['direction']
-    output = sqlite_db.get_place(snl=snl, direction=direction)
-    await bot.send_message(chat_id=message.from_user.id,
-                           text=output)
+    # async with state.proxy() as data:
+    #     snl: str = data['snl']
+    #     direction: str = data['direction']
+    res = sqlite_db.get_snl_and_direction(message)
+    # output = sqlite_db.get_place(snl=snl, direction=direction)
+    if res:
+        snl: str
+        direction: str
+        snl, direction = res
+        output = sqlite_db.get_place(snl=snl, direction=direction)
+        await bot.send_message(chat_id=message.from_user.id,
+                               text=output)
+    else:
+        await message.answer(text='Ошибка! Вы не указали направление или СНИЛС.')
 
 
 async def process_of_getting_snl(message: types.Message, state: FSMContext) -> None:
@@ -78,6 +87,7 @@ async def process_of_getting_snl(message: types.Message, state: FSMContext) -> N
         async with state.proxy() as data:
             data['snl'] = snl
             print(data.values())
+            await sqlite_db.add_snl(message=message, snl=snl)
         if data.get('direction') is None:
             await message.answer(text=f'СНИЛС введен корректно! Теперь выберете {TEXT_DIRECTIONS}.',
                                  reply_markup=inline_keyboards.get_directions_keyboard(),
@@ -117,6 +127,8 @@ async def confirmation_process(callback_query: types.CallbackQuery, state: FSMCo
             await UserState.SELECT_DIRECTION.set()
         case 'yes':
             await callback_query.message.edit_text('Направление сохранено!')
+            async with state.proxy() as data:
+                await sqlite_db.add_direction(message=callback_query.message, direction=data['direction'])
             await state.reset_state(with_data=False)
         case _:
             raise 'Неизвестная команда'

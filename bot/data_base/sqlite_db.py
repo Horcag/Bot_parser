@@ -80,16 +80,15 @@ async def sql_start() -> None:
             cur.execute("INSERT INTO places VALUES (?, ?)", (all_directions_dictionary[i], " ".join(places)))
             base.commit()
 
-    base.execute("CREATE TABLE IF NOT EXISTS user (user_id PRIMARY KEY , snils TEXT, directions TEXT)")
+    base.execute("CREATE TABLE IF NOT EXISTS user (user_id PRIMARY KEY , snils TEXT, direction TEXT)")
     base.commit()
 
     print('Base update')
 
 
-async def sql_add_user(message: Message, state: FSMContext):
-    async with state.proxy() as data:
-        cur.execute("INSERT INTO user VALUES(?,?,?)", (message.from_user.id, data['snl']))
-        base.commit()
+async def sql_add_user(message: Message):
+    cur.execute("INSERT OR IGNORE INTO user (user_id, snils, direction) VALUES(?,?,?)", (message.from_user.id, 'None', 'None'))
+    base.commit()
 
 
 def get_place(snl: str, direction: str) -> str:
@@ -118,14 +117,7 @@ def get_place(snl: str, direction: str) -> str:
                               f'Всего заявлений - {len(list_students)}'
                 return result
 
-            return 'Бюджетные места ещё полностью не укомплектованы или иная ошибка. Сообщите о данной проблеме автору или в поддержку.'
-    # for j in students_data:  # поиск нашего СНИЛСа
-    #     if j[1] == snl:
-    #         last_place: int = numbers[0] - sum(numbers[1:])  # кол-во бюджетных мест и индекс последнего
-    #         if last_place <= len(students_data):  # делаем проверку, чтобы кол-во заявлений было больше, чем бюджетных мест
-    #             return [j[0], students_data[last_place - 1][2], total_number_of_places, last_place]
-    #         break
-    # return []
+    return 'Бюджетные места ещё полностью не укомплектованы или иная ошибка. Сообщите о данной проблеме автору или в поддержку.'
 
 
 def get_highest_priority(students_data: list) -> list[list[int | str]]:
@@ -136,3 +128,31 @@ def get_highest_priority(students_data: list) -> list[list[int | str]]:
             student_data_with_highest_priority.append([count, *student_data[1:]])
             count += 1
     return student_data_with_highest_priority
+
+
+async def add_snl(message: Message, snl: str):
+    cur.execute("UPDATE user SET snils = ? WHERE user_id = ?", (snl, message.from_user.id))
+    base.commit()
+
+
+async def add_direction(message: Message, direction: str):
+    cur.execute("UPDATE user SET direction = ? WHERE user_id = ?", (direction, message.chat.id))
+    base.commit()
+
+
+def get_snl_and_direction(message: Message) -> list[str, str]:
+    user_id = message.from_user.id
+    cur.execute("SELECT snils, direction FROM user WHERE user_id = ?", (user_id,))
+    result: list = cur.fetchone()
+
+    if result is not None:
+        if result[0] is not None:
+            snl: str = result[0]
+        else:
+            return []
+        if result[1] is not None:
+            direction: str = result[1]
+        else:
+            return []
+        return [snl, direction]
+    return []
