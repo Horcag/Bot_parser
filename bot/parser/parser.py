@@ -26,43 +26,22 @@ class University:
                         time = date_or_time
         return [data, time]
 
-    def get_table(self, snl: str) -> list[int]:
+    def get_table(self) -> list[list[list[int | str]], list[str]]:
         it: Iterator[element.Tag] = iter(self.table_with_values.find_all('tr'))  # итератор со всеми строками из таблицы
         total_number_of_places: int = int(next(it).text.split()[-1])  # забираем последнее число - кол-во заявлений
         divs: element.ResultSet = self.soup.find_all('div', class_='numb')  # данные со всеми местами - общее кол-во бюджетных мест и под квоты
-        numbers: list[int] = []  # первое число кол-во бюджетных мест, а остальные места различные квоты
-        students_data: list[list[str | int]] = []  # список всех людей с их данными с наивысшим приоритетом
-        count: int = 1  # счетчик людей с наивысшим приоритетом
+        places: list[str] = []  # первое число кол-во бюджетных мест, а остальные места различные квоты
+        students_data: list[list[str | int]] = []  # список всех людей с их данными
         for div in divs:
             span: element.Tag = div.find('span')
             if span:
-                number: int = int(span.text.strip())
-                numbers.append(number)
+                places.append(span.text.strip())
         for i in it:
-            student_data: list[str | int] = i.text.split()
-            if student_data[8] == '1' and student_data[10] == 'Сданы ВИ':  # делаем отбор по приоритетам: нам нужен только первый
-                student_data = [count] + list(map(lambda a: int(a) if a.isdigit() else a, student_data))[1:]  # для удобства преобразуем все числовые значения в 'int'
-                students_data.append(student_data)
-                count += 1
-        for j in students_data:  # поиск нашего СНИЛСа
-            if j[1] == snl:
-                last_place: int = numbers[0] - sum(numbers[1:])  # кол-во бюджетных мест и индекс последнего
-                if last_place <= len(students_data):  # делаем проверку, чтобы кол-во заявлений было больше, чем бюджетных мест
-                    return [j[0], students_data[last_place - 1][2], total_number_of_places, last_place]
-                break
-        return []
+            student_data: list[str | int] = i.get_text(separator='*', strip=True).split('*')
+            student_data = list(map(lambda a: int(a) if a.isdigit() else a, student_data)) # для удобства преобразуем все числовые значения в 'int'
+            students_data.append(student_data)
 
-    def output(self, snl: str) -> str:
-        initial_value: list[int] = self.get_table(snl)
-
-        if initial_value:
-            initial_date: list[str] = self.get_data()
-            result: str = f'Дата обновления - {initial_date[0]} {initial_date[1]}\n' \
-                          f'Место в списке - {initial_value[0]} из {initial_value[3]} бюджетных\n' \
-                          f'Минимальный проходной балл - {initial_value[1]}\n' \
-                          f'Всего заявлений - {initial_value[2]}'
-            return result
-        return 'Бюджетные места ещё полностью не укомплектованы или иная ошибка. Сообщите о данной проблеме автору или в поддержку.'  # обработка 'last_place <= len(value)'
+        return [students_data, places]  # Возвращаем список со студентами и кол-вом мест на направлении
 
 
 if __name__ == '__main__':
