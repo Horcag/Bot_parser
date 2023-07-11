@@ -5,15 +5,19 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from bot.keyboards import inline_keyboards
+from bot.keyboards.inline_keyboards import all_directions_dictionary as dir_dict
 from loader import bot
 from bot.data_base import sqlite_db
 
 snl_pattern: Pattern = compile(r'^\d{3}-\d{3}-\d{3}-\d{2}$')
 HELP: str = '''
 <b>Команды</b>:
-/snils - ввод своего СНИЛСа
-/directions - выбор своего направления
-/place - место в списке (работает только после указания СНИЛСа и направления)
+/snils – ввод своего СНИЛСа
+/directions – выбор своего направления
+/place – место в списке (работает только после указания СНИЛСа и направления)
+/profile – показывает текущее направление и СНИЛС
+/cancel – отменяет любую команду ввода
+
 
 <b>Что такое направление с наивысшим приоритетом?</b>
 Это то направление, где Вы поставили 1.
@@ -47,12 +51,26 @@ async def help_command(message: types.Message) -> None:
     # await message.delete()
 
 
+async def cancel_command(message: types.Message, state: FSMContext) -> None:
+    await bot.send_message(chat_id=message.from_user.id,
+                           text='Вы успешно отменили выполнение команды!')
+    await state.reset_state(with_data=False)
+
+
 async def get_snl(message: types.Message) -> None:
     await bot.send_message(chat_id=message.from_user.id,
                            text=TEXT_SNL,
                            reply_markup=inline_keyboards.command_cancel(),
                            )
     await UserState.SNILS.set()
+
+
+async def get_profile(message: types.Message) -> None:
+    student_snl, student_directions = await sqlite_db.get_user_data(message.from_user.id)
+    text_profile: str = f"{'❌' if student_snl == 'None' else '✅'} Ваш СНИЛС – <b>{'не указан' if student_snl == 'None' else student_snl}</b>\n" \
+                        f"{'❌' if student_directions == 'None' else '✅'} Ваше направление – <b>{'не указано' if student_directions == 'None' else dir_dict[student_directions]}</b>"
+    await bot.send_message(chat_id=message.from_user.id,
+                           text=text_profile)
 
 
 async def get_direction_list(message: types.Message) -> None:
@@ -63,21 +81,25 @@ async def get_direction_list(message: types.Message) -> None:
     await UserState.SELECT_DIRECTION.set()
 
 
-async def get_place(message: types.Message, state: FSMContext) -> None:
-    # async with state.proxy() as data:
-    #     snl: str = data['snl']
-    #     direction: str = data['direction']
-    res = sqlite_db.get_snl_and_direction(message)
-    # output = sqlite_db.get_place(snl=snl, direction=direction)
-    if res:
+async def get_place(message: types.Message) -> None:
+    text_error: str = 'Ошибка! Вы не указали'
+    res = await sqlite_db.get_user_data(message.from_user.id)
+    if res[0] == 'None' and res[1] == 'None':
+        await message.answer(text=f'{text_error} направление и СНИЛС.')
+
+    elif res[0] == 'None':
+        await message.answer(text=f'{text_error} СНИЛС.')
+    elif res[1] == 'None':
+        await message.answer(text=f'{text_error} направление.')
+    else:
         snl: str
         direction: str
         snl, direction = res
-        output = sqlite_db.get_place(snl=snl, direction=direction)
+        output = await sqlite_db.get_place(snl=snl, direction=direction)
         await bot.send_message(chat_id=message.from_user.id,
-                               text=output)
-    else:
-        await message.answer(text='Ошибка! Вы не указали направление или СНИЛС.')
+                               text=output,
+                               reply_markup=inline_keyboards.get_update_database()
+                               )
 
 
 async def process_of_getting_snl(message: types.Message, state: FSMContext) -> None:
@@ -86,8 +108,7 @@ async def process_of_getting_snl(message: types.Message, state: FSMContext) -> N
     if match(snl_pattern, snl):
         async with state.proxy() as data:
             data['snl'] = snl
-            print(data.values())
-            await sqlite_db.add_snl(message=message, snl=snl)
+            await sqlite_db.add_snl(user_id=message.from_user.id, snl=snl)
         if data.get('direction') is None:
             await message.answer(text=f'СНИЛС введен корректно! Теперь выберете {TEXT_DIRECTIONS}.',
                                  reply_markup=inline_keyboards.get_directions_keyboard(),
@@ -128,7 +149,7 @@ async def confirmation_process(callback_query: types.CallbackQuery, state: FSMCo
         case 'yes':
             await callback_query.message.edit_text('Направление сохранено!')
             async with state.proxy() as data:
-                await sqlite_db.add_direction(message=callback_query.message, direction=data['direction'])
+                await sqlite_db.add_direction(user_id=callback_query.from_user.id, direction=data['direction'])
             await state.reset_state(with_data=False)
         case _:
             raise 'Неизвестная команда'
@@ -142,14 +163,17 @@ async def enter_snils(callback_query: types.CallbackQuery) -> None:
     await UserState.SNILS.set()
 
 
-def register_handlers(dp: Dispatcher) -> None:
-    dp.register_message_handler(start_command, commands=['start'])
-    dp.register_message_handler(help_command, commands=['help'])
-    dp.register_message_handler(get_snl, commands=['snils'])
-    dp.register_message_handler(get_direction_list, commands=['directions'])
-    dp.register_message_handler(process_of_getting_snl, state=UserState.SNILS)
-    dp.register_message_handler(get_place, commands=['place'])
-    dp.register_callback_query_handler(process_cancel, lambda callback_query: callback_query.data == 'cancel', state='*')
-    dp.register_callback_query_handler(direction_selection_process, state=UserState.SELECT_DIRECTION)
-    dp.register_callback_query_handler(confirmation_process, state=UserState.YES_OR_NO_SELECT_DIRECTION)
-    dp.register_callback_query_handler(enter_snils, lambda callback_query: callback_query.data == "enter_snl")
+async def get_update(callback_query: types.CallbackQuery) -> None:
+    res: bool = await sqlite_db.get_time_update_database()
+    user_snl: str
+    user_direction: str
+    user_snl, user_direction = await sqlite_db.get_user_data(callback_query.from_user.id)
+    if res:
+        text = await sqlite_db.get_place(snl=user_snl, direction=user_direction)
+        await callback_query.message.edit_text(text=text,
+                                               reply_markup=inline_keyboards.get_update_database()
+                                               )
+        await callback_query.answer('Новые данные найдены')
+    else:
+        await callback_query.answer('Новые данные не найдены')
+

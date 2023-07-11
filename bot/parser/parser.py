@@ -12,7 +12,7 @@ class University:
         self.value_tables: int = int(self.soup.find('input', id='length').get('value'))  # ищем кол-во таблиц
         self.table_with_values: element.Tag = self.soup.find('table', id=f'bak_table_id{self.value_tables}')  # нужная нам таблица последняя
 
-    def get_data(self) -> list[str]:
+    async def get_data(self) -> list[str]:
         data_pattern: Pattern = compile(r'(0?[1-9]|[12][0-9]|3[01]).(0?[1-9]|1[012]).(2023)')
         time_pattern: Pattern = compile(r'([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])')
         data: str = ''
@@ -26,7 +26,7 @@ class University:
                         time = date_or_time
         return [data, time]
 
-    def get_table(self) -> list[list[list[int | str]], list[str]]:
+    async def get_table(self) -> list[list[list[int | str]], list[str]]:
         it: Iterator[element.Tag] = iter(self.table_with_values.find_all('tr'))  # итератор со всеми строками из таблицы
         total_number_of_places: int = int(next(it).text.split()[-1])  # забираем последнее число - кол-во заявлений
         divs: element.ResultSet = self.soup.find_all('div', class_='numb')  # данные со всеми местами - общее кол-во бюджетных мест и под квоты

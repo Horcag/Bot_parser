@@ -1,1 +1,5 @@
-from bot.parser import parser
+from .parser import University
+
+__all__ = [
+    'University'
+]

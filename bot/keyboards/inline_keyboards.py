@@ -56,3 +56,9 @@ def command_cancel() -> InlineKeyboardMarkup:
     ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
     ik.add(CANCEL)
     return ik
+
+
+def get_update_database() -> InlineKeyboardMarkup:
+    ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
+    ik.add(InlineKeyboardButton(text='Обновить данные', callback_data='update_data'))
+    return ik

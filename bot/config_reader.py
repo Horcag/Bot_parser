@@ -20,3 +20,7 @@ class Settings(BaseSettings):
 # и провалидируется объект конфига,
 # который можно далее импортировать из разных мест
 config = Settings()
+
+__all__ = [
+    'config'
+]
