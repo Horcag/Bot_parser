@@ -9,6 +9,7 @@ async def setup_bot_commands(dp: Dispatcher):
         BotCommand(command="/snils", description="ввод СНИЛСа"),
         BotCommand(command="/directions", description="выбор направления"),
         BotCommand(command="/place", description="место в списке"),
+        BotCommand(command="/table", description="таблица"),
         BotCommand(command="/profile", description="профиль"),
         BotCommand(command="/cancel", description="отмена команды"),
         BotCommand(command="/help", description="помощь")

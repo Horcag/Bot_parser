@@ -1,12 +1,12 @@
-from datetime import datetime
 import sqlite3
-import sqlite3 as sq
+from datetime import datetime
 from sqlite3 import Cursor, Connection
 
 from aiogram.types import Message
+from aiogram.types.base import Integer
 from loguru import logger
+
 from bot.parser.parser import University
-from aiogram.dispatcher import FSMContext
 
 all_directions_dictionary: dict[str, str] = {
     '2': 'PMI',
@@ -42,7 +42,7 @@ async def sql_start() -> None:
 
     base.execute("CREATE TABLE IF NOT EXISTS user (user_id INTEGER PRIMARY KEY , snils TEXT, direction TEXT)")
     base.commit()
-    logger.info('Database is set up')
+    logger.info('Database is set up.')
 
 
 async def sql_add_user(message: Message):
@@ -89,17 +89,17 @@ async def get_highest_priority(students_data: list) -> list[list[int | str]]:
     return student_data_with_highest_priority
 
 
-async def add_snl(user_id: str, snl: str) -> None:
+async def add_snl(user_id: Integer, snl: str) -> None:
     cur.execute("UPDATE user SET snils = ? WHERE user_id = ?", (snl, user_id))
     base.commit()
 
 
-async def add_direction(user_id: str, direction: str) -> None:
+async def add_direction(user_id: Integer, direction: str) -> None:
     cur.execute("UPDATE user SET direction = ? WHERE user_id = ?", (direction, user_id))
     base.commit()
 
 
-async def get_user_data(user_id: str) -> list[str, str]:
+async def get_user_data(user_id: Integer) -> list[str, str]:
     cur.execute("SELECT snils, direction FROM user WHERE user_id = ?", (user_id,))
     result: list = cur.fetchone()
 
@@ -159,3 +159,27 @@ async def get_time_update_database() -> bool:
         flag = True
 
     return flag
+
+
+async def get_table(direction: str) -> list[str]:
+    cur.execute(f'SELECT Ordinal_number, SNILS_or_Number_of_application, Amount_of_points, Surrender_original, Priority from {all_directions_dictionary[direction]}')
+    title = [('№', 'СНИЛС', 'Баллы', 'Ориг', 'Пр-ет')]
+    text = cur.fetchall()
+    result: list[str] = []
+    for i in title:
+        nom_t, snl_t, bal_t, orig_t, pr_t = i
+        nom_t = f'|{nom_t:^2}|'
+        snl_t = f'{snl_t:^19}|'
+        bal_t = f'{bal_t:^5}|'
+        orig_t = f'{orig_t:^4}|'
+        pr_t = f'{pr_t:^5}|'
+        result.append(f'{nom_t}{snl_t}{bal_t}{orig_t}{pr_t}')
+    for j in text:
+        nom, snl, bal, orig, pr = j
+        nom = f'|{nom:^4}|'
+        snl = f'{snl:^14}|'
+        bal = f'{bal:^8}|'
+        orig = f'{orig:^5}|'
+        pr = f'{pr:^9}|'
+        result.append(f'{nom}{snl}{bal}{orig}{pr}')
+    return result

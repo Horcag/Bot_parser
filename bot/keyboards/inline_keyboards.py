@@ -62,3 +62,11 @@ def get_update_database() -> InlineKeyboardMarkup:
     ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=1)
     ik.add(InlineKeyboardButton(text='Обновить данные', callback_data='update_data'))
     return ik
+
+
+def get_pagination(left: int, right: int) -> InlineKeyboardMarkup:
+    ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=3)
+    ik.add(InlineKeyboardButton(text='←', callback_data=f'pagination_left_{left}_{right}'),
+           InlineKeyboardButton(text=f'{left}/{right}', callback_data=f'pagination_all'),
+           InlineKeyboardButton(text='→', callback_data=f'pagination_right_{left}_{right}'))
+    return ik

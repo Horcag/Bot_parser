@@ -1,12 +1,14 @@
 import asyncio
-
-from aiogram import Bot, Dispatcher, executor, types
+from typing import Callable, Dict, Any, Awaitable, Union
+from time import time
+from aiogram import Dispatcher, types
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.utils.exceptions import Throttled
+from loguru import logger
 
 
-def rate_limit(limit: int, key=None):
+def rate_limit(limit: int | float, key=None):
     """
     Decorator for configuring rate limit and key in different functions.
 
@@ -25,74 +27,55 @@ def rate_limit(limit: int, key=None):
 
 
 class ThrottlingMiddleware(BaseMiddleware):
-    """
-    Simple middleware
-    """
-
     def __init__(self, limit=1, key_prefix='antiflood_'):
         self.rate_limit = limit
         self.prefix = key_prefix
         super(ThrottlingMiddleware, self).__init__()
 
-    async def on_process_message(self, message: types.Message, data: dict):
-        """
-        This handler is called when dispatcher receives a message
-
-        :param message:
-        """
-        # Get current handler
+    async def throttle(self, target: types.Message | types.CallbackQuery):
         handler = current_handler.get()
-
-        # Get dispatcher from context
         dispatcher = Dispatcher.get_current()
-        # If handler was configured, get rate limit and key from handler
+
         if handler:
             limit = getattr(handler, 'throttling_rate_limit', self.rate_limit)
             key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}")
         else:
             limit = self.rate_limit
-            key = f"{self.prefix}_message"
-
-        # Use Dispatcher.throttle method.
+            key = f"{self.prefix}_message_or_callback"
         try:
             await dispatcher.throttle(key, rate=limit)
         except Throttled as t:
-            # Execute action
-            await self.message_throttled(message, t)
-
-            # Cancel current handler
+            await self.target_throttled(target, t)
             raise CancelHandler()
 
-    async def on_pr(self):
-        pass
-
-    async def message_throttled(self, message: types.Message, throttled: Throttled):
-        """
-        Notify user only on first exceed and notify about unlocking only on last exceed
-
-        :param message:
-        :param throttled:
-        """
+    async def target_throttled(self, target: types.Message | types.CallbackQuery,
+                               throttled: Throttled) -> None:
         handler = current_handler.get()
         dispatcher = Dispatcher.get_current()
         if handler:
             key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}")
         else:
-            key = f"{self.prefix}_message"
+            key = f"{self.prefix}_message_or_callback"
 
-        # Calculate how many times is left till the block ends
-        delta = throttled.rate - throttled.delta
+        delta: int = throttled.rate - throttled.delta
+        if isinstance(target, types.Message):
+            if throttled.exceeded_count <= 2:
+                await target.reply(f'Подожди {throttled.rate} секунд прежде, чем отправить новый запрос.')
+            await asyncio.sleep(delta)
+            thr: Throttled = await dispatcher.check_key(key)
+            if thr.exceeded_count == throttled.exceeded_count:
+                await target.reply('Можете повторить запрос.')
+        else:
+            if throttled.exceeded_count <= 2:
+                await target.message.reply(f'Подожди {throttled.rate} секунд прежде, чем отправить новый запрос.')
+            await asyncio.sleep(delta)
+            thr: Throttled = await dispatcher.check_key(key)
+            if thr.exceeded_count == throttled.exceeded_count:
+                await target.message.reply('Можете повторить запрос.')
+                await target.answer()
 
-        # Prevent flooding
-        if throttled.exceeded_count <= 2:
-            await message.reply('Вы слишком часто отправляете команду, подождите.')
+    async def on_process_message(self, message: types.Message, data: dict):
+        await self.throttle(message)
 
-        # Sleep.
-        await asyncio.sleep(delta)
-
-        # Check lock status
-        thr = await dispatcher.check_key(key)
-
-        # If current message is not last with current key - do not send message
-        if thr.exceeded_count == throttled.exceeded_count:
-            await message.reply('Можете отправить команду.')
+    async def on_process_callback_query(self, callback_query: types.CallbackQuery, data: dict):
+        await self.throttle(callback_query)

@@ -1,13 +1,14 @@
 from re import compile, Pattern, match
 
-from aiogram import types, Dispatcher
+from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from bot import middleware
+from bot.data_base import sqlite_db
 from bot.keyboards import inline_keyboards
 from bot.keyboards.inline_keyboards import all_directions_dictionary as dir_dict
 from loader import bot
-from bot.data_base import sqlite_db
 
 snl_pattern: Pattern = compile(r'^\d{3}-\d{3}-\d{3}-\d{2}$')
 HELP: str = '''
@@ -15,6 +16,7 @@ HELP: str = '''
 /snils – ввод своего СНИЛСа
 /directions – выбор своего направления
 /place – место в списке (работает только после указания СНИЛСа и направления)
+/table - показывает таблицу выбранного направления. Выбранное направление можно посмотреть в профиле
 /profile – показывает текущее направление и СНИЛС
 /cancel – отменяет любую команду ввода
 
@@ -73,6 +75,16 @@ async def get_profile(message: types.Message) -> None:
                            text=text_profile)
 
 
+async def get_table(message: types.Message) -> None:
+    direction: str = (await sqlite_db.get_user_data(message.from_user.id))[1]
+    table: list[str] = await sqlite_db.get_table(direction)
+    table_string: str = '\n'.join(table[:21])
+    ln = len(table) - 1  # вычитаем, потому что в первый раз выводились названия кнопок
+    await bot.send_message(chat_id=message.from_user.id,
+                           text=table_string,
+                           reply_markup=inline_keyboards.get_pagination(1, ln // 20 + bool(ln % 20)))
+
+
 async def get_direction_list(message: types.Message) -> None:
     await bot.send_message(chat_id=message.from_user.id,
                            text=f'Выберите {TEXT_DIRECTIONS}',
@@ -81,6 +93,7 @@ async def get_direction_list(message: types.Message) -> None:
     await UserState.SELECT_DIRECTION.set()
 
 
+@middleware.rate_limit(60)
 async def get_place(message: types.Message) -> None:
     text_error: str = 'Ошибка! Вы не указали'
     res = await sqlite_db.get_user_data(message.from_user.id)
@@ -163,6 +176,7 @@ async def enter_snils(callback_query: types.CallbackQuery) -> None:
     await UserState.SNILS.set()
 
 
+@middleware.rate_limit(60)
 async def get_update(callback_query: types.CallbackQuery) -> None:
     res: bool = await sqlite_db.get_time_update_database()
     user_snl: str
@@ -177,3 +191,34 @@ async def get_update(callback_query: types.CallbackQuery) -> None:
     else:
         await callback_query.answer('Новые данные не найдены')
 
+
+@middleware.rate_limit(0.1)
+async def process_table(callback_query: types.CallbackQuery) -> None:
+    answer = callback_query.data.split('_')
+    if answer[1] == 'all':
+        return await callback_query.answer()
+    direction: str = (await sqlite_db.get_user_data(callback_query.from_user.id))[1]
+    table: list = await sqlite_db.get_table(direction)
+    if answer[1] == 'right':
+        if answer[2] == answer[3]:
+            table_string: str = '\n'.join(table[:21])
+            await callback_query.message.edit_text(text=table_string,
+                                                   reply_markup=inline_keyboards.get_pagination(1, int(answer[3])))
+        else:
+            i_answer_2 = int(answer[2])
+            left = i_answer_2 + 1
+            table_string = '\n'.join([table[0], *table[i_answer_2 * 20 + 1: left * 20 + 1]])
+            await callback_query.message.edit_text(text=table_string,
+                                                   reply_markup=inline_keyboards.get_pagination(left, int(answer[3])))
+    else:
+        if answer[2] == '1':
+            i_answer_3 = int(answer[3])
+            table_string: str = '\n'.join([table[0], *table[(i_answer_3 - 1) * 20 + 1:]])
+            await callback_query.message.edit_text(text=table_string,
+                                                   reply_markup=inline_keyboards.get_pagination(i_answer_3, i_answer_3))
+        else:
+            i_answer_2 = int(answer[2])
+            left = i_answer_2 - 1
+            table_string = '\n'.join([table[0], *table[(left - 1) * 20 + 1: (i_answer_2 - 1) * 20 + 1]])
+            await callback_query.message.edit_text(text=table_string,
+                                                   reply_markup=inline_keyboards.get_pagination(left, int(answer[3])))

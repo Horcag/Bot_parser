@@ -1,4 +1,4 @@
-from .middleware_antiflood import ThrottlingMiddleware
+from .middleware_antiflood import ThrottlingMiddleware, rate_limit
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from loguru import logger
 from aiogram import Dispatcher
