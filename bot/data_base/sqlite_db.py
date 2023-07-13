@@ -7,6 +7,7 @@ from aiogram.types.base import Integer
 from loguru import logger
 
 from bot.parser.parser import University
+from bot.keyboards.inline_keyboards import all_directions_dictionary as dir_dict
 
 all_directions_dictionary: dict[str, str] = {
     '2': 'PMI',
@@ -42,6 +43,11 @@ async def sql_start() -> None:
 
     base.execute("CREATE TABLE IF NOT EXISTS user (user_id INTEGER PRIMARY KEY , snils TEXT, direction TEXT)")
     base.commit()
+
+    cur.execute("CREATE TABLE IF NOT EXISTS table_status (message_id INTEGER PRIMARY KEY , sort_orig INTEGER, sort_pr INTEGER, direction TEXT, left_margin INTEGER, "
+                "right_margin INTEGER)")
+    base.commit()
+
     logger.info('Database is set up.')
 
 
@@ -54,9 +60,9 @@ async def get_place(snl: str, direction: str) -> str:
     direction: str = all_directions_dictionary[direction]
 
     cur.execute("SELECT * FROM time_update")
-    data: str
+    date: str
     time: str
-    data, time = cur.fetchall()[-1][:2]
+    date, time = cur.fetchall()[-1][:2]
 
     cur.execute(f"SELECT * FROM {direction}")
     list_students: list[tuple[str | int]] = cur.fetchall()
@@ -70,7 +76,7 @@ async def get_place(snl: str, direction: str) -> str:
                     values.extend(list(map(int, value.split())))
             last_place = values[0] - sum(values[1:])  # кол-во бюджетных мест и индекс последнего; нулевой индекс - все бюджетные места, а остальные различные квоты
             if last_place <= len(list_students):  # делаем проверку, чтобы кол-во заявлений было больше, чем бюджетных мест
-                result: str = f'<i>Дата обновления</i> – <b>{data} {time}</b>\n' \
+                result: str = f'<i>Дата обновления</i> – <b>{date} {time}</b>\n' \
                               f'<i>Место в списке</i> – <b>{student_data[0]}</b> <i>из</i> <b>{last_place}</b> <i>бюджетных</i>\n' \
                               f'<i>Минимальный проходной балл</i> – <b>{students_with_highest_priority[last_place - 1][2]}</b>\n' \
                               f'<i>Всего заявлений</i> – <b>{len(list_students)}</b>'
@@ -133,15 +139,17 @@ async def update_database() -> None:
 
         cur.execute("INSERT INTO places VALUES (?, ?)", (all_directions_dictionary[i], " ".join(places)))
         base.commit()
+
+
     logger.info('Database has been updated.')
 
 
 async def get_time_update_database() -> bool:
-    data: str
+    date: str
     time: str
-    data, time = await University('2').get_data()
+    date, time = await University('2').get_data()
 
-    cur.execute("INSERT INTO time_update VALUES (?, ?, ?)", (data, time, datetime.now().strftime('%d.%m.%Y - %H:%M:%S')))
+    cur.execute("INSERT INTO time_update VALUES (?, ?, ?)", (date, time, datetime.now().strftime('%d.%m.%Y - %H:%M:%S')))
     base.commit()
 
     cur.execute("SELECT * FROM time_update")
@@ -155,17 +163,33 @@ async def get_time_update_database() -> bool:
         last_row_data, last_row_time = "0", "0"
 
     flag: bool = False  # флаг для проверки, что данные новые или старые
-    if data != last_row_data or time != last_row_time:
+    if date != last_row_data or time != last_row_time:
         flag = True
 
     return flag
 
 
-async def get_table(direction: str) -> list[str]:
-    cur.execute(f'SELECT Ordinal_number, SNILS_or_Number_of_application, Amount_of_points, Surrender_original, Priority from {all_directions_dictionary[direction]}')
-    title = [('№', 'СНИЛС', 'Баллы', 'Ориг', 'Пр-ет')]
+async def get_table(direction: str, sort_orig: bool, sort_pr: bool) -> list[str]:
+    cur.execute("SELECT * FROM time_update")
+    date: str
+    time: str
+    date, time = cur.fetchall()[-1][:2]
+
+    sql_order: str = ''
+
+    if sort_orig and sort_pr:
+        sql_order = 'Surrender_original, Priority'
+    elif sort_orig:
+        sql_order = 'Surrender_original'
+    elif sort_pr:
+        sql_order = 'Priority'
+    row_number: str = f'ROW_NUMBER() OVER (ORDER BY {sql_order}) as Number'
+    if not sort_orig and not sort_pr:  # если нет никаких параметров сортировки, то и сортировать не надо
+        row_number = 'Ordinal_number'
+    cur.execute(f'SELECT {row_number}, SNILS_or_Number_of_application, Amount_of_points, Surrender_original, Priority FROM {all_directions_dictionary[direction]}')
     text = cur.fetchall()
-    result: list[str] = []
+    title = [('№', 'СНИЛС', 'Баллы', 'Ориг', 'Пр-ет')]
+    result: list[str] = [f'{dir_dict[direction]} {date} {time}',]
     for i in title:
         nom_t, snl_t, bal_t, orig_t, pr_t = i
         nom_t = f'|{nom_t:^2}|'
@@ -183,3 +207,35 @@ async def get_table(direction: str) -> list[str]:
         pr = f'{pr:^9}|'
         result.append(f'{nom}{snl}{bal}{orig}{pr}')
     return result
+
+
+async def create_table_status(message_id: int, direction: str, left_margin: int, right_margin: int):
+    cur.execute("INSERT OR IGNORE INTO table_status VALUES(?,?,?,?,?,?)", (message_id, 0, 0, direction, left_margin, right_margin))
+    base.commit()
+
+
+async def get_table_status(message: Message) -> list[int, int, str, int, int]:
+    cur.execute("SELECT sort_orig, sort_pr, direction, left_margin, right_margin FROM table_status WHERE message_id = ?", (message.message_id,))
+    result: list = cur.fetchone()
+    sort_orig: int
+    sort_pr: int
+    direction: str
+    left_margin: int
+    right_margin: int
+    sort_orig, sort_pr, direction, left_margin, right_margin = result
+    return [sort_orig, sort_pr, direction, left_margin, right_margin]
+
+
+async def update_sort_orig_table_status(message: Message, sort_orig: int) -> None:
+    cur.execute("UPDATE table_status SET sort_orig = ? WHERE message_id = ?", (sort_orig, message.message_id))
+    base.commit()
+
+
+async def update_sort_pr_table_status(message: Message, sort_pr: int) -> None:
+    cur.execute("UPDATE table_status SET sort_pr = ? WHERE message_id = ?", (sort_pr, message.message_id))
+    base.commit()
+
+
+async def update_left_margin_table_status(message: Message, left_margin: int) -> None:
+    cur.execute("UPDATE table_status SET left_margin = ? WHERE message_id = ?", (left_margin, message.message_id))
+    base.commit()

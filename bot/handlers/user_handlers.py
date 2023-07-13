@@ -77,12 +77,16 @@ async def get_profile(message: types.Message) -> None:
 
 async def get_table(message: types.Message) -> None:
     direction: str = (await sqlite_db.get_user_data(message.from_user.id))[1]
-    table: list[str] = await sqlite_db.get_table(direction)
-    table_string: str = '\n'.join(table[:21])
-    ln = len(table) - 1  # вычитаем, потому что в первый раз выводились названия кнопок
+    table: list[str] = await sqlite_db.get_table(direction=direction, sort_orig=0, sort_pr=0)
+
+    table_string: str = '\n'.join(table[:22])
+    ln = len(table) - 2  # вычитаем, потому что в первый раз выводились названия направления и колонок
+    left_margin: int = 1
+    right_margin: int = ln // 20 + bool(ln % 20)
+    await sqlite_db.create_table_status(message_id=message.message_id + 1, direction=direction, left_margin=left_margin, right_margin=right_margin)
     await bot.send_message(chat_id=message.from_user.id,
                            text=table_string,
-                           reply_markup=inline_keyboards.get_pagination(1, ln // 20 + bool(ln % 20)))
+                           reply_markup=inline_keyboards.get_pagination(left=left_margin, right=right_margin, sort_orig=0, sort_pr=0))
 
 
 async def get_direction_list(message: types.Message) -> None:
@@ -192,33 +196,60 @@ async def get_update(callback_query: types.CallbackQuery) -> None:
         await callback_query.answer('Новые данные не найдены')
 
 
-@middleware.rate_limit(0.1)
+@middleware.rate_limit(0.2)
 async def process_table(callback_query: types.CallbackQuery) -> None:
     answer = callback_query.data.split('_')
     if answer[1] == 'all':
         return await callback_query.answer()
-    direction: str = (await sqlite_db.get_user_data(callback_query.from_user.id))[1]
-    table: list = await sqlite_db.get_table(direction)
+    sort_orig: int
+    sort_pr: int
+    direction: str
+    left_margin: int
+    right_margin: int
+    sort_orig, sort_pr, direction, left_margin, right_margin = await sqlite_db.get_table_status(callback_query.message)
+    table: list = await sqlite_db.get_table(direction, sort_orig=sort_orig, sort_pr=sort_pr)
     if answer[1] == 'right':
-        if answer[2] == answer[3]:
-            table_string: str = '\n'.join(table[:21])
+        if left_margin == right_margin:
+            table_string: str = '\n'.join(table[:22])
+            await sqlite_db.update_left_margin_table_status(callback_query.message, left_margin=1)
             await callback_query.message.edit_text(text=table_string,
-                                                   reply_markup=inline_keyboards.get_pagination(1, int(answer[3])))
+                                                   reply_markup=inline_keyboards.get_pagination(1, right_margin, sort_orig=sort_orig, sort_pr=sort_pr))
         else:
-            i_answer_2 = int(answer[2])
-            left = i_answer_2 + 1
-            table_string = '\n'.join([table[0], *table[i_answer_2 * 20 + 1: left * 20 + 1]])
+            new_left_margin = left_margin + 1
+            table_string = '\n'.join([table[0], table[1], *table[left_margin * 20 + 2: new_left_margin * 20 + 2]])
+            await sqlite_db.update_left_margin_table_status(callback_query.message, left_margin=new_left_margin)
             await callback_query.message.edit_text(text=table_string,
-                                                   reply_markup=inline_keyboards.get_pagination(left, int(answer[3])))
+                                                   reply_markup=inline_keyboards.get_pagination(new_left_margin, right_margin, sort_orig=sort_orig, sort_pr=sort_pr))
     else:
-        if answer[2] == '1':
-            i_answer_3 = int(answer[3])
-            table_string: str = '\n'.join([table[0], *table[(i_answer_3 - 1) * 20 + 1:]])
+        if left_margin == 1:
+            table_string: str = '\n'.join([table[0], table[1], *table[(right_margin - 2) * 20 + 2:]])
+            await sqlite_db.update_left_margin_table_status(callback_query.message, left_margin=right_margin)
             await callback_query.message.edit_text(text=table_string,
-                                                   reply_markup=inline_keyboards.get_pagination(i_answer_3, i_answer_3))
+                                                   reply_markup=inline_keyboards.get_pagination(right_margin, right_margin, sort_orig=sort_orig, sort_pr=sort_pr))
         else:
-            i_answer_2 = int(answer[2])
-            left = i_answer_2 - 1
-            table_string = '\n'.join([table[0], *table[(left - 1) * 20 + 1: (i_answer_2 - 1) * 20 + 1]])
+            new_left_margin = left_margin - 1
+            table_string = '\n'.join([table[0], table[1], *table[(new_left_margin - 1) * 20 + 2: (left_margin - 1) * 20 + 2]])
+            await sqlite_db.update_left_margin_table_status(callback_query.message, left_margin=new_left_margin)
             await callback_query.message.edit_text(text=table_string,
-                                                   reply_markup=inline_keyboards.get_pagination(left, int(answer[3])))
+                                                   reply_markup=inline_keyboards.get_pagination(new_left_margin, right_margin, sort_orig=sort_orig, sort_pr=sort_pr))
+
+
+async def process_sort_orig_or_pr(callback_query: types.CallbackQuery) -> None:
+    answer = callback_query.data
+    sort_orig: int
+    sort_pr: int
+    direction: str
+    left_margin: int
+    right_margin: int
+    sort_orig, sort_pr, direction, left_margin, right_margin = await sqlite_db.get_table_status(callback_query.message)
+    if answer == 'sort_orig':
+        sort_orig = int(not sort_orig)
+        await sqlite_db.update_sort_orig_table_status(callback_query.message, sort_orig=sort_orig)
+    else:
+        sort_pr = int(not sort_pr)
+        await sqlite_db.update_sort_pr_table_status(callback_query.message, sort_pr=sort_pr)
+
+    table: list = await sqlite_db.get_table(direction, sort_orig=sort_orig, sort_pr=sort_pr)
+    table_string = '\n'.join([table[0], table[1], *table[(left_margin - 1) * 20 + 2: left_margin * 20 + 2]])
+    await callback_query.message.edit_text(text=table_string,
+                                           reply_markup=inline_keyboards.get_pagination(left_margin, right_margin, sort_orig=sort_orig, sort_pr=sort_pr))

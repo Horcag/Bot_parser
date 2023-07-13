@@ -64,9 +64,12 @@ def get_update_database() -> InlineKeyboardMarkup:
     return ik
 
 
-def get_pagination(left: int, right: int) -> InlineKeyboardMarkup:
+def get_pagination(left: int, right: int, sort_orig: int, sort_pr: int) -> InlineKeyboardMarkup:
     ik: InlineKeyboardMarkup = InlineKeyboardMarkup(row_width=3)
-    ik.add(InlineKeyboardButton(text='←', callback_data=f'pagination_left_{left}_{right}'),
+    ik.add(InlineKeyboardButton(text='←', callback_data=f'pagination_left'),
            InlineKeyboardButton(text=f'{left}/{right}', callback_data=f'pagination_all'),
-           InlineKeyboardButton(text='→', callback_data=f'pagination_right_{left}_{right}'))
+           InlineKeyboardButton(text='→', callback_data=f'pagination_right'))
+    ik.add(InlineKeyboardButton(text=f'{"✅" if sort_orig else "❌"} Сорт-ка по оригиналу', callback_data='sort_orig'),
+           InlineKeyboardButton(text=f'{"✅" if sort_pr else "❌"} Сорт-ка по приоритету', callback_data='sort_pr')
+           )
     return ik
