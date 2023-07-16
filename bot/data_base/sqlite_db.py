@@ -140,7 +140,6 @@ async def update_database() -> None:
         cur.execute("INSERT INTO places VALUES (?, ?)", (all_directions_dictionary[i], " ".join(places)))
         base.commit()
 
-
     logger.info('Database has been updated.')
 
 
@@ -169,7 +168,7 @@ async def get_time_update_database() -> bool:
     return flag
 
 
-async def get_table(direction: str, sort_orig: bool, sort_pr: bool) -> list[str]:
+async def get_table(direction: str, sort_orig: int, sort_pr: int) -> list[str]:
     cur.execute("SELECT * FROM time_update")
     date: str
     time: str
@@ -189,7 +188,7 @@ async def get_table(direction: str, sort_orig: bool, sort_pr: bool) -> list[str]
     cur.execute(f'SELECT {row_number}, SNILS_or_Number_of_application, Amount_of_points, Surrender_original, Priority FROM {all_directions_dictionary[direction]}')
     text = cur.fetchall()
     title = [('№', 'СНИЛС', 'Баллы', 'Ориг', 'Пр-ет')]
-    result: list[str] = [f'{dir_dict[direction]} {date} {time}',]
+    result: list[str] = [f'{dir_dict[direction]} {date} {time}', ]
     for i in title:
         nom_t, snl_t, bal_t, orig_t, pr_t = i
         nom_t = f'|{nom_t:^2}|'

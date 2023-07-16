@@ -1,6 +1,6 @@
 from re import compile, Pattern, match
 
-from aiogram import types
+from aiogram import types, utils
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
@@ -182,17 +182,17 @@ async def enter_snils(callback_query: types.CallbackQuery) -> None:
 
 @middleware.rate_limit(60)
 async def get_update(callback_query: types.CallbackQuery) -> None:
-    res: bool = await sqlite_db.get_time_update_database()
+    res: bool = await sqlite_db.get_time_update_database()  # результат не нужен, потому что в любом случае, если сообщение старое, то зайдем в except
     user_snl: str
     user_direction: str
     user_snl, user_direction = await sqlite_db.get_user_data(callback_query.from_user.id)
-    if res:
-        text = await sqlite_db.get_place(snl=user_snl, direction=user_direction)
+    text: str = await sqlite_db.get_place(snl=user_snl, direction=user_direction)
+    try:
         await callback_query.message.edit_text(text=text,
                                                reply_markup=inline_keyboards.get_update_database()
                                                )
         await callback_query.answer('Новые данные найдены')
-    else:
+    except utils.exceptions.MessageNotModified:
         await callback_query.answer('Новые данные не найдены')
 
 
