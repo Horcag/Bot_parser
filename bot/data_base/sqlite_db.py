@@ -129,12 +129,12 @@ async def update_database() -> None:
         students: list[list[int | str]]
         students, places = await University(i).get_table()
 
-        cur.execute(f"CREATE TABLE IF NOT EXISTS {all_directions_dictionary[i]} (Ordinal_number INTEGER, SNILS_or_Number_of_application PRIMARY KEY ,\
-             Amount_of_points INTEGER, Mathematics INTEGER, Physics_ICT INTEGER, Russian_language INTEGER, The_amount_of_points_for_ID INTEGER, Surrender_original TEXT, \
-             Priority INTEGER, Highest_priority TEXT, Status TEXT)")
+        cur.execute(f"CREATE TABLE IF NOT EXISTS {all_directions_dictionary[i]} (ordinal_number INTEGER, SNILS_or_Number_of_application PRIMARY KEY ,\
+             amount_of_points INTEGER, mathematics INTEGER, physics_ICT INTEGER, russian_language INTEGER, the_amount_of_points_for_ID INTEGER, surrender_original TEXT, \
+             priority INTEGER, highest_priority TEXT, status TEXT, considered_for_enrollment TEXT)")
         base.commit()
 
-        cur.executemany(f"INSERT INTO {all_directions_dictionary[i]} VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", students)
+        cur.executemany(f"INSERT INTO {all_directions_dictionary[i]} VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", students)
         base.commit()
 
         cur.execute("INSERT INTO places VALUES (?, ?)", (all_directions_dictionary[i], " ".join(places)))
@@ -177,15 +177,15 @@ async def get_table(direction: str, sort_orig: int, sort_pr: int) -> list[str]:
     sql_order: str = ''
 
     if sort_orig and sort_pr:
-        sql_order = 'Surrender_original, Priority'
+        sql_order = 'surrender_original, priority'
     elif sort_orig:
-        sql_order = 'Surrender_original'
+        sql_order = 'surrender_original'
     elif sort_pr:
-        sql_order = 'Priority'
+        sql_order = 'priority'
     row_number: str = f'ROW_NUMBER() OVER (ORDER BY {sql_order}) as Number'
     if not sort_orig and not sort_pr:  # если нет никаких параметров сортировки, то и сортировать не надо
-        row_number = 'Ordinal_number'
-    cur.execute(f'SELECT {row_number}, SNILS_or_Number_of_application, Amount_of_points, Surrender_original, Priority FROM {all_directions_dictionary[direction]}')
+        row_number = 'ordinal_number'
+    cur.execute(f'SELECT {row_number}, SNILS_or_Number_of_application, amount_of_points, surrender_original, priority FROM {all_directions_dictionary[direction]}')
     text = cur.fetchall()
     title = [('№', 'СНИЛС', 'Баллы', 'Ориг', 'Пр-ет')]
     result: list[str] = [f'{dir_dict[direction]} {date} {time}', ]

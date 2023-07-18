@@ -41,8 +41,9 @@ class University:
             student_data: list[str | int] = i.get_text(separator='*', strip=True).split('*')
             student_data = list(map(lambda a: int(a) if a.isdigit() else a, student_data))  # для удобства преобразуем все числовые значения в 'int'
             students_data.append(student_data)
-        df = pd.DataFrame(students_data, columns=['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'K', 'L', 'M'])
-        df = df.sort_values(['C', 'G', 'D', 'E', 'F'], ascending=(False, True, False, False, False))  # сорт по сумме баллов -> по доп баллам -> сорт мат, икт/физ, русский
+        df = pd.DataFrame(students_data, columns=['A', 'B', 'amount_of_points', 'mat', 'phys', 'rus', 'the_amount_of_points_for_ID', 'H', 'I', 'J', 'K', 'L'])
+        df = df.sort_values(['amount_of_points', 'the_amount_of_points_for_ID', 'mat', 'phys', 'rus'], ascending=(False, True, False, False, False))
+        # сорт по сумме баллов -> по доп баллам -> сорт мат, икт/физ, русский
         students_data = [[i + 1] + lst[1:] for i, lst in enumerate(df.values.tolist())]
         return [students_data, places]  # Возвращаем список со студентами и кол-вом мест на направлении
 

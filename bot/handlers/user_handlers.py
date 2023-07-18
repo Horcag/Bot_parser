@@ -191,7 +191,7 @@ async def get_update(callback_query: types.CallbackQuery) -> None:
         await callback_query.message.edit_text(text=text,
                                                reply_markup=inline_keyboards.get_update_database()
                                                )
-        await callback_query.answer('Новые данные найдены')
+        await callback_query.answer('Обновление данных...')
     except utils.exceptions.MessageNotModified:
         await callback_query.answer('Новые данные не найдены')
 
