@@ -5,9 +5,10 @@ from sqlite3 import Cursor, Connection
 from aiogram.types import Message
 from aiogram.types.base import Integer
 from loguru import logger
+from urllib3.exceptions import ReadTimeoutError
 
-from bot.parser.parser import University
 from bot.keyboards.inline_keyboards import all_directions_dictionary as dir_dict
+from bot.parser.parser import University
 
 all_directions_dictionary: dict[str, str] = {
     '2': 'PMI',
@@ -146,26 +147,30 @@ async def update_database() -> None:
 async def get_time_update_database() -> bool:
     date: str
     time: str
-    date, time = await University('2').get_data()
+    try:
+        date, time = await University('2').get_data()
 
-    cur.execute("INSERT INTO time_update VALUES (?, ?, ?)", (date, time, datetime.now().strftime('%d.%m.%Y - %H:%M:%S')))
-    base.commit()
+        cur.execute("INSERT INTO time_update VALUES (?, ?, ?)", (date, time, datetime.now().strftime('%d.%m.%Y - %H:%M:%S')))
+        base.commit()
 
-    cur.execute("SELECT * FROM time_update")
-    res: list[tuple[str, str]] = cur.fetchall()  # получаем список кортежей с датой и временем
+        cur.execute("SELECT * FROM time_update")
+        res: list[tuple[str, str]] = cur.fetchall()  # получаем список кортежей с датой и временем
 
-    last_rod_data: str
-    last_rod_time: str
-    if len(res) > 1:
-        last_row_data, last_row_time = res[-2][:2]
-    else:
-        last_row_data, last_row_time = "0", "0"
+        last_rod_data: str
+        last_rod_time: str
+        if len(res) > 1:
+            last_row_data, last_row_time = res[-2][:2]
+        else:
+            last_row_data, last_row_time = "0", "0"
 
-    flag: bool = False  # флаг для проверки, что данные новые или старые
-    if date != last_row_data or time != last_row_time:
-        flag = True
+        flag: bool = False  # флаг для проверки, что данные новые или старые
+        if date != last_row_data or time != last_row_time:
+            flag = True
 
-    return flag
+        return flag
+    except (ReadTimeoutError, Exception) as er:
+        logger.error(f'Site not available - {er}')
+        return False
 
 
 async def get_table(direction: str, sort_orig: int, sort_pr: int) -> list[str]:

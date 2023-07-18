@@ -182,12 +182,14 @@ async def enter_snils(callback_query: types.CallbackQuery) -> None:
 
 @middleware.rate_limit(60)
 async def get_update(callback_query: types.CallbackQuery) -> None:
-    res: bool = await sqlite_db.get_time_update_database()  # результат не нужен, потому что в любом случае, если сообщение старое, то зайдем в except
-    user_snl: str
-    user_direction: str
-    user_snl, user_direction = await sqlite_db.get_user_data(callback_query.from_user.id)
-    text: str = await sqlite_db.get_place(snl=user_snl, direction=user_direction)
     try:
+        res: bool = await sqlite_db.get_time_update_database()
+        if res:
+            await sqlite_db.update_database()
+        user_snl: str
+        user_direction: str
+        user_snl, user_direction = await sqlite_db.get_user_data(callback_query.from_user.id)
+        text: str = await sqlite_db.get_place(snl=user_snl, direction=user_direction)
         await callback_query.message.edit_text(text=text,
                                                reply_markup=inline_keyboards.get_update_database()
                                                )

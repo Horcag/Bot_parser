@@ -1,16 +1,22 @@
 from re import match, compile, Pattern
-from bs4 import BeautifulSoup, element
+from typing import Iterator
+
 import pandas as pd
 import requests
-from typing import Iterator
+from bs4 import BeautifulSoup, element, Tag
 
 
 class University:
     def __init__(self, url: str) -> None:
         self.url: str = f'https://priemsamara.ru/ratings/?pk={url}&pay=budget&filter=all'
-        self.page: requests.models.Response = requests.get(self.url)
+        self.page: requests.models.Response = requests.get(self.url, timeout=20)
+        if self.page.status_code != 200:
+            raise Exception(f'HTTP ERROR {self.page.status_code}')
         self.soup: BeautifulSoup = BeautifulSoup(self.page.text, 'lxml')
-        self.value_tables: int = int(self.soup.find('input', id='length').get('value'))  # ищем кол-во таблиц
+        values: Tag = self.soup.find('input', id='length')
+        if values is None:
+            raise Exception('TableNone')
+        self.value_tables: int = int(values.get('value'))  # ищем кол-во таблиц
         self.table_with_values: element.Tag = self.soup.find('table', id=f'bak_table_id{self.value_tables}')  # нужная нам таблица последняя
 
     async def get_data(self) -> list[str]:
